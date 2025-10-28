@@ -309,6 +309,11 @@ static bool containMakeFdsCOE(nsjconf_t* nsjconf) {
 
 bool setupFD(nsjconf_t* nsjconf, int fd_in, int fd_out, int fd_err) {
 	if (nsjconf->stderr_to_null) {
+		if (!nsjconf->stderr_path.empty()) {
+			LOG_E(
+			    "Conflict config: cannot set stderr and stderr_to_null simultaneously");
+			return false;
+		}
 		LOG_D("Redirecting fd=2 (STDERR_FILENO) to /dev/null");
 		if ((fd_err = TEMP_FAILURE_RETRY(open("/dev/null", O_RDWR))) == -1) {
 			PLOG_E("open('/dev/null', O_RDWR");

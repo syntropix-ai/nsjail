@@ -92,6 +92,9 @@ void setLogLevel(enum llevel_t ll);
 enum llevel_t getLogLevel(void);
 void logFile(const std::string& log_file, int log_fd);
 bool logSet();
+void setReportFile(const std::string& report_file);
+void setReportFd(int fd);
+void report(const char* format, ...) __attribute__((format(printf, 1, 2)));
 
 }  // namespace logs
 

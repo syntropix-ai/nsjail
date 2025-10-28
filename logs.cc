@@ -44,6 +44,8 @@ static int _log_fd = STDERR_FILENO;
 static bool _log_fd_isatty = true;
 static enum llevel_t _log_level = INFO;
 static bool _log_set = false;
+static int _report_fd = STDERR_FILENO;
+static bool _report_set = false;
 
 static void setDupLogFdOr(int fd, int orfd) {
 	int saved_errno = errno;
@@ -172,6 +174,56 @@ void logMsg(enum llevel_t ll, const char* fn, int ln, bool perr, const char* fmt
 
 void logStop(int sig) {
 	LOG_I("Server stops due to fatal signal (%d) caught. Exiting", sig);
+}
+void setReportFile(const std::string& report_file) {
+	if (_report_set) {
+		PLOG_F("cannot repeatedly set reporting file/fd");
+	}
+	if (!report_file.empty()) {
+		int new_report_fd = TEMP_FAILURE_RETRY(
+		    open(report_file.c_str(), O_CREAT | O_WRONLY | O_CLOEXEC, 0640));
+		if (new_report_fd == -1) {
+			PLOG_F("Can't open('%s')", report_file.c_str());
+		} else {
+			if (_report_fd > STDERR_FILENO) {
+				close(_report_fd);
+			}
+			_report_fd = new_report_fd;
+		}
+		_report_set = true;
+	} else {
+		LOG_E("Report file path is empty, using stderr for reporting");
+	}
+}
+
+void setReportFd(int fd) {
+	if (_report_set) {
+		PLOG_F("cannot repeatedly set reporting file/fd");
+	}
+	if (fd > STDERR_FILENO) {
+		if (fd != _report_fd) {
+			close(_report_fd);
+		}
+		// prevent user program to access the reporting file
+		_report_fd = fcntl(fd, F_DUPFD_CLOEXEC, 0);
+		if (_report_fd == -1) {
+			PLOG_F("fcntl(%d, F_DUPFD_CLOEXEC) failed", fd);
+		}
+	} else {
+		_report_fd = fd;
+	}
+	_report_set = true;
+}
+
+void report(const char* format, ...) {
+	if (!_report_set) {
+		return;
+	}
+	va_list args;
+	va_start(args, format);
+	vdprintf(_report_fd, format, args);
+	va_end(args);
+	dprintf(_report_fd, "\n");
 }
 
 }  // namespace logs

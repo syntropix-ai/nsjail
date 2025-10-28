@@ -48,6 +48,10 @@
 #include "subproc.h"
 #include "util.h"
 
+#include<iostream>
+#include <memory>
+#include <cstring>
+
 namespace nsjail {
 
 static __thread std::atomic<int> sigFatal(0);
@@ -103,13 +107,13 @@ static bool setTimer(nsjconf_t* nsjconf) {
 	struct itimerval it = {
 	    .it_interval =
 		{
-		    .tv_sec = 1,
-		    .tv_usec = 0,
+		    .tv_sec = 0,
+		    .tv_usec = 10000,
 		},
 	    .it_value =
 		{
-		    .tv_sec = 1,
-		    .tv_usec = 0,
+		    .tv_sec = 0,
+		    .tv_usec = 10000,
 		},
 	};
 	if (setitimer(ITIMER_REAL, &it, NULL) == -1) {
@@ -270,8 +274,37 @@ static int listenMode(nsjconf_t* nsjconf) {
 
 static int standaloneMode(nsjconf_t* nsjconf) {
 	for (;;) {
-		if (subproc::runChild(nsjconf, /* netfd= */ -1, STDIN_FILENO, STDOUT_FILENO,
-			STDERR_FILENO) == -1) {
+		int fd_in, fd_out, fd_err;
+		if (nsjconf->stdin_path.empty()) {
+			fd_in = STDIN_FILENO;
+		} else {
+			if ((fd_in = TEMP_FAILURE_RETRY(
+				 open(nsjconf->stdin_path.c_str(), O_RDONLY))) == -1) {
+				PLOG_E("open('%s', O_RDONLY)", nsjconf->stdin_path.c_str());
+				return EXIT_FAILURE;
+			}
+		}
+		if (nsjconf->stdout_path.empty()) {
+			fd_out = STDOUT_FILENO;
+		} else {
+			if ((fd_out = TEMP_FAILURE_RETRY(open(nsjconf->stdout_path.c_str(),
+				 O_WRONLY | O_CREAT | O_TRUNC, 0666))) == -1) {
+				PLOG_E("open('%s', O_WRONLY | O_CREAT | O_TRUNC, 0666)",
+				    nsjconf->stdout_path.c_str());
+				return EXIT_FAILURE;
+			}
+		}
+		if (nsjconf->stderr_path.empty()) {
+			fd_err = STDERR_FILENO;
+		} else {
+			if ((fd_err = TEMP_FAILURE_RETRY(open(nsjconf->stderr_path.c_str(),
+				 O_WRONLY | O_CREAT | O_TRUNC, 0666))) == -1) {
+				PLOG_E("open('%s', O_WRONLY | O_CREAT | O_TRUNC, 0666)",
+				    nsjconf->stderr_path.c_str());
+				return EXIT_FAILURE;
+			}
+		}
+		if (subproc::runChild(nsjconf, /* netfd= */ -1, fd_in, fd_out, fd_err) == -1) {
 			LOG_E("Couldn't launch the child process");
 			return 0xff;
 		}
@@ -327,7 +360,23 @@ void setTC(int fd, const struct termios* trm) {
 }  // namespace nsjail
 
 int main(int argc, char* argv[]) {
+	for (int i = 0; i < argc; i++) {
+		std::cout << argv[i] << std::endl;
+	}
+	char** new_argv = new char*[argc];
+
+	// Copy the arguments from the old array to the new array
+	for (int i = 0; i < argc; i++) {
+		int len = std::strlen(argv[i]);
+		new_argv[i] = new char[len + 1];
+		std::strcpy(new_argv[i], argv[i]);
+	}
+
 	std::unique_ptr<nsjconf_t> nsjconf = cmdline::parseArgs(argc, argv);
+	for (int i = 0; i < argc; i++) {
+		delete[] new_argv[i];
+	}
+	delete[] new_argv;
 	std::unique_ptr<struct termios> trm = nsjail::getTC(STDIN_FILENO);
 
 	if (!nsjconf) {
