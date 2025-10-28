@@ -20,6 +20,10 @@ This is NOT an official Google product.
 
 ***
 
+### Build
+
+make CXXFLAGS+=' -Wno-error=extra -I/usr/include/libnl3 -Ikafel/include'
+
 ### Overview
 NsJail is a process isolation tool for Linux. It utilizes Linux namespace subsystem, resource limits, and the seccomp-bpf syscall filters of the Linux kernel.
 
