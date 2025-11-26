@@ -21,7 +21,7 @@ This is NOT an official Google product.
 ***
 
 ### Build
-
+sudo pacman -S flex bison protobuf
 make CXXFLAGS+=' -Wno-error=extra -I/usr/include/libnl3 -Ikafel/include'
 
 ### Overview
